@@ -18,6 +18,7 @@ const int maxIds = 10;
 uint8_t fingerTemplate[512];
 uint8_t allTemplates[maxIds][512];
 bool enrolledIds[maxIds] = {false}; // Array to keep track of enrolled IDs
+String bufferString = "";
 
 const char* ssid = "LHWifi";
 const char* password = "Lamadrid_Wifi987";
@@ -518,6 +519,8 @@ void store_template_to_buf(){
 
   Serial.println("Waiting for valid finger....");
   while (finger.getImage() != FINGERPRINT_OK) { // press down a finger take 1st image 
+  // end function when it waits for 20 seconds, reset counter when success
+  // send to status in web server then client that it's waiting for a finger
   }
   Serial.println("Image taken");
 
@@ -530,6 +533,7 @@ void store_template_to_buf(){
   }
 
   Serial.println("Remove finger");
+  // send status to web server then client to remove finger
   delay(2000);
   uint8_t p = 0;
   while (p != FINGERPRINT_NOFINGER) {
@@ -538,9 +542,11 @@ void store_template_to_buf(){
 
   Serial.println("Place same finger again, waiting....");
   while (finger.getImage() != FINGERPRINT_OK) { // press the same finger again to take 2nd image
+  // end function when it waits for 20 seconds, reset counter when success
+  // send to status in web server then client that it's waiting for a finger
   }
   Serial.println("Image taken");
-
+  // send status to web server then client that it's processing
 
   if (finger.image2Tz(2) == FINGERPRINT_OK) { //creating the charecter file for 2nd image 
     Serial.println("Image converted");
@@ -572,11 +578,14 @@ void store_template_to_buf(){
     Serial.println("Template data (comma sperated HEX):");
     for (int k = 0; k < (512/finger.packet_len); k++) { //printing out the template data in seperate rows, where row-length = packet_length
       for (int l = 0; l < finger.packet_len; l++) {
-        Serial.print("0x");
-        Serial.print(f_buf[(k * finger.packet_len) + l], HEX);
-        Serial.print(",");
+        //Serial.print("0x");
+        //Serial.print(f_buf[(k * finger.packet_len) + l], HEX);
+        //Serial.print(",");
+        bufferString += "0x";
+        bufferString += String(f_buf[(k * finger.packet_len) + l], HEX);
+        bufferString += ",";
       }
-      Serial.println("");
+      //Serial.println("");
     }
   }
 
@@ -615,10 +624,13 @@ void show_from_saved(uint16_t id) {
   if (finger.get_template_buffer(512, f_buf) == FINGERPRINT_OK) {
     for (int k = 0; k < 4; k++) {
       for (int l = 0; l < 128; l++) {
-        Serial.print(f_buf[(k * 128) + l], HEX);
-        Serial.print(",");
+        //Serial.print(f_buf[(k * 128) + l], HEX);
+        //Serial.print(",");
+        bufferString += "0x";
+        bufferString += String(f_buf[(k * finger.packet_len) + l], HEX);
+        bufferString += ",";
       }
-      Serial.println("");
+      //Serial.println("");
     }
   }
 }
@@ -659,8 +671,13 @@ void write_template_data_to_sensor() {
 }
 
 void enrollAPI(){
-  Serial.println("enrollAPI");
-  webServer.send(200, "text/plain", "This is enrollAPI endpoint");
+  while(bufferString==""){
+    Serial.println("enrollAPI");
+    store_template_to_buf();
+  }  
+  // end connection/loop when it's been 3 times for the store_template_to_buf to run and bufferString == "". send an error when it fails
+  // end connection when it's successful
+  webServer.send(200, "text/plain", bufferString);
 }
 void verifyAPI(){
   Serial.println("verifyAPI");
