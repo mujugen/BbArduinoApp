@@ -92,7 +92,9 @@ void setup() {
   Serial.print("WiFi Mode: ");
   Serial.println(WiFi.getMode());
 
-  webServer.on("/api/arduinoAPITest", handleAPITest);
+  webServer.on("/api/enrollAPI", enrollAPI);
+  webServer.on("/api/verifyAPI", verifyAPI);
+  webServer.on("/api/deleteAPI", deleteAPI);
   webServer.begin();
 }
 
@@ -386,7 +388,7 @@ void sendMessageToAPI() {
   String json;
   serializeJson(doc, json);
 
-  http.begin(client, "http://192.168.254.114:3000/api/test"); // Replace with your API endpoint
+  http.begin(client, "http://192.168.254.108:3000/api/test");
   http.addHeader("Content-Type", "application/json");
   
   int httpResponseCode = http.POST(json);
@@ -654,4 +656,17 @@ void write_template_data_to_sensor() {
     Serial.println("Storing error");
     return ;
   }
+}
+
+void enrollAPI(){
+  Serial.println("enrollAPI");
+  webServer.send(200, "text/plain", "This is enrollAPI endpoint");
+}
+void verifyAPI(){
+  Serial.println("verifyAPI");
+  webServer.send(200, "text/plain", "This is verifyAPI endpoint");
+}
+void deleteAPI(){
+  Serial.println("deleteAPI");
+  webServer.send(200, "text/plain", "This is deleteAPI endpoint");
 }
