@@ -123,7 +123,6 @@ void loop() {
       uint8_t id = findAvailableID();
       if (id != 0) {
         enrollFingerprint(id);
-        sendToServer(id); // Send the ID to the server
       } else {
         Serial.println("All available IDs are already used.");
       }
@@ -132,7 +131,6 @@ void loop() {
       uint8_t idToDelete = readnumber();
       if (idToDelete > 0 && idToDelete <= maxIds) {
         deleteFingerprint(idToDelete);
-        sendDeleteRequest(idToDelete);
       } else {
         Serial.println("Invalid ID. Please enter a valid ID to delete.");
       }      
@@ -370,68 +368,6 @@ void verifyFingerprint() {
 }
 
 
-void sendToServer(uint8_t currentId) {
-  HTTPClient http;
-  WiFiClient client;
-  http.begin(client, "http://192.168.1.4/Enrolltest1.php");  // Replace with your server URL
-  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-
-  String postData = "FINGERID=" + String(currentId);
-
-  int httpCode = http.POST(postData);
-  if (httpCode == HTTP_CODE_OK) {
-    String response = http.getString();
-    Serial.println(response);
-    Serial.println("ID sent to server successfully.");
-  } else {
-    Serial.println("Error sending ID to server.");
-  }
-
-  http.end();
-}
-
-void sendDeleteRequest(uint8_t idToDelete) {
-  HTTPClient http;
-  WiFiClient client;
-  http.begin(client, "http://192.168.1.4/DeleteTest1.php");  // Replace with your server URL
-  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-
-  String postDeleteData = "FINGERID=" + String(idToDelete);
-  
-  int httpCode = http.POST(postDeleteData);
-
-  if (httpCode == HTTP_CODE_OK) {
-    String dresponse = http.getString();
-    Serial.println(dresponse);
-    Serial.println("Fingerprint deleted successfully.");
-  } else {
-    Serial.println("Error deleting fingerprint from the server.");
-  }
-
-  http.end();
-}
-
-void sendverifyFingerprint(uint8_t currentId) {
-  HTTPClient http;
-  WiFiClient client;
-  http.begin(client, "http://192.168.1.4/Verify.php");  // Replace with your server URL
-  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  
-  String postData = "FINGERID=" + String(currentId);
-
-  int httpCode = http.POST(postData);
-    String vresponse = http.getString();
-    Serial.println(vresponse);
-
-    if (vresponse.indexOf("exists") >= 0) {
-      Serial.println("Fingerprint ID exists in the database.");
-    } else {
-      Serial.println("Fingerprint ID does not exist in the database.");
-    }
-  
-
-  http.end();
-}
 
 void sendMessageToAPI() {
   HTTPClient http;
