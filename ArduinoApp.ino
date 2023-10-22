@@ -4,6 +4,8 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
+#include <WebSocketsServer.h>
+
 
 
 #define Finger_Rx 14 // D5 yellow wire
@@ -27,6 +29,8 @@ HTTPClient http;
 
 //WiFiServer server(80);
 ESP8266WebServer webServer(80);
+WebSocketsServer webSocket = WebSocketsServer(81);
+
 
 bool enrollmentMessageDisplayed = false;
 
@@ -97,6 +101,9 @@ void setup() {
   webServer.on("/api/verifyAPI", verifyAPI);
   webServer.on("/api/deleteAPI", deleteAPI);
   webServer.begin();
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+
 }
 
 uint8_t readnumber(void) {
@@ -174,6 +181,7 @@ void loop() {
   } 
 
   webServer.handleClient();
+  webSocket.loop();
   
 }
 
@@ -516,13 +524,13 @@ void printHex(int num, int precision) {
 
 
 void store_template_to_buf(){
-
+  uint32_t starttime = millis();
   Serial.println("Waiting for valid finger....");
-  while (finger.getImage() != FINGERPRINT_OK) { // press down a finger take 1st image 
-  // end function when it waits for 20 seconds, reset counter when success
-  // send to status in web server then client that it's waiting for a finger
+  webSocket.broadcastTXT("Place finger");
+  while (finger.getImage() != FINGERPRINT_OK) {
   }
   Serial.println("Image taken");
+  webSocket.broadcastTXT("Remove finger");
 
 
   if (finger.image2Tz(1) == FINGERPRINT_OK) { //creating the charecter file for 1st image 
@@ -539,15 +547,13 @@ void store_template_to_buf(){
   while (p != FINGERPRINT_NOFINGER) {
     p = finger.getImage();
   }
-
+  webSocket.broadcastTXT("Place finger");
   Serial.println("Place same finger again, waiting....");
-  while (finger.getImage() != FINGERPRINT_OK) { // press the same finger again to take 2nd image
-  // end function when it waits for 20 seconds, reset counter when success
-  // send to status in web server then client that it's waiting for a finger
+  while (finger.getImage() != FINGERPRINT_OK) {
   }
   Serial.println("Image taken");
   // send status to web server then client that it's processing
-
+  webSocket.broadcastTXT("Processing");
   if (finger.image2Tz(2) == FINGERPRINT_OK) { //creating the charecter file for 2nd image 
     Serial.println("Image converted");
   } else {
@@ -588,6 +594,7 @@ void store_template_to_buf(){
       //Serial.println("");
     }
   }
+  webSocket.broadcastTXT("Success");
 
 }
 
@@ -670,15 +677,32 @@ void write_template_data_to_sensor() {
   }
 }
 
-void enrollAPI(){
-  while(bufferString==""){
-    Serial.println("enrollAPI");
-    store_template_to_buf();
-  }  
-  // end connection/loop when it's been 3 times for the store_template_to_buf to run and bufferString == "". send an error when it fails
-  // end connection when it's successful
-  webServer.send(200, "text/plain", bufferString);
+void enrollAPI() {
+    int counter = 0;
+    
+    webSocket.broadcastTXT("Starting");
+    
+    // Loop as long as bufferString is empty and counter is 3 or less.
+    while (bufferString == "" && counter <= 3) {
+        Serial.println("enrollAPI");
+        store_template_to_buf();
+        counter += 1;
+
+        // If the loop has iterated 3 times without success, send an error message.
+        if (counter > 3) {
+            webSocket.broadcastTXT("Failed");
+            webServer.send(500, "text/plain");
+            return;
+        }
+    }
+    
+    // If the loop exited due to bufferString being non-empty, send a success message.
+    if (bufferString != "") {
+        webSocket.broadcastTXT("Waiting");
+        webServer.send(200, "text/plain", bufferString);
+    }
 }
+
 void verifyAPI(){
   Serial.println("verifyAPI");
   webServer.send(200, "text/plain", "This is verifyAPI endpoint");
@@ -686,4 +710,15 @@ void verifyAPI(){
 void deleteAPI(){
   Serial.println("deleteAPI");
   webServer.send(200, "text/plain", "This is deleteAPI endpoint");
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+    switch(type) {
+        case WStype_DISCONNECTED:
+            break;
+        case WStype_TEXT:
+            String text = String((char *) &payload[0]);
+            // Handle received text if needed
+            break;
+    }
 }
