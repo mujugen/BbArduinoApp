@@ -18,12 +18,16 @@ uint8_t f_buf[512];
 
 const int maxIds = 10;
 uint8_t fingerTemplate[512];
+uint8_t fingerTemplate2[512];
+uint8_t fingerTemplate3[512];
 uint8_t allTemplates[maxIds][512];
-bool enrolledIds[maxIds] = {false}; // Array to keep track of enrolled IDs
+bool enrolledIds[maxIds] = {false};
 String bufferString = "";
 
 const char* ssid = "LHWifi";
 const char* password = "Lamadrid_Wifi987";
+
+const char* webAppIP = "192.168.254.110";
 
 HTTPClient http;
 
@@ -173,10 +177,6 @@ void loop() {
       for (uint8_t id = 1; id <= 10; id++) {        
       show_from_saved(id);
       }
-    }
-    else if (cmd == '7') {
-      Serial.println("write_template_data_to_sensor");
-      write_template_data_to_sensor();
     }
   } 
 
@@ -397,7 +397,9 @@ void sendMessageToAPI() {
   String json;
   serializeJson(doc, json);
 
-  http.begin(client, "http://192.168.254.108:3000/api/test");
+  char url[100];
+  sprintf(url, "http://%s:3000/api/test", webAppIP);
+  http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   
   int httpResponseCode = http.POST(json);
@@ -579,21 +581,20 @@ void store_template_to_buf(){
     Serial.println("Failed to transfer template");
     return;
   }
-  
-  if (finger.get_template_buffer(512, f_buf) == FINGERPRINT_OK) { //read the template data from sensor and save it to buffer f_buf
-    Serial.println("Template data (comma sperated HEX):");
-    for (int k = 0; k < (512/finger.packet_len); k++) { //printing out the template data in seperate rows, where row-length = packet_length
-      for (int l = 0; l < finger.packet_len; l++) {
-        //Serial.print("0x");
-        //Serial.print(f_buf[(k * finger.packet_len) + l], HEX);
-        //Serial.print(",");
-        bufferString += "0x";
-        bufferString += String(f_buf[(k * finger.packet_len) + l], HEX);
-        bufferString += ",";
-      }
-      //Serial.println("");
+
+  bufferString = "";
+  if (finger.get_template_buffer(512, f_buf) == FINGERPRINT_OK) {
+    memcpy(fingerTemplate2, f_buf, 512);
+    Serial.println("fingerTemplate2:");
+    for (int i = 0; i < 512; i++) {
+      //Serial.print("0x");
+      bufferString += String(fingerTemplate2[i], HEX);
+      bufferString += ",";
     }
+    Serial.println(bufferString);    
+    Serial.println();
   }
+  
   webSocket.broadcastTXT("Success");
 
 }
@@ -629,6 +630,7 @@ void show_from_saved(uint16_t id) {
   
   uint8_t f_buf[512];
   if (finger.get_template_buffer(512, f_buf) == FINGERPRINT_OK) {
+    bufferString = "0";
     for (int k = 0; k < 4; k++) {
       for (int l = 0; l < 128; l++) {
         //Serial.print(f_buf[(k * 128) + l], HEX);
@@ -639,50 +641,47 @@ void show_from_saved(uint16_t id) {
       }
       //Serial.println("");
     }
+     Serial.println(bufferString);
   }
+  
 }
+
 
 void write_template_data_to_sensor() {
-  int template_buf_size=512; //usually hobby grade sensors have 512 byte template data, watch datasheet to know the info
-  
-  /*
-  you can manually save the data got from "get_template.ino" example like this
+    int template_buf_size = 512;
 
-  uint8_t fingerTemplate[512]={0x03,0x0E,....your template data.....};
-  
-  */
-  memset(fingerTemplate, 0xff, 512); //comment this line if you've manually put data to the line above
-  
-  Serial.println("Ready to write template to sensor...");
-  Serial.println("Enter the id to enroll against, i.e id (1 to 127)");
-  int id = 1;
-  if (id == 0) {// ID #0 not allowed, try again!
-    return;
-  }
-  Serial.print("Writing template against ID #"); Serial.println(id);
+    Serial.println("Ready to write template to sensor...");
+    Serial.println("Enter the id to enroll against, i.e id (1 to 127)");
+    int id = 1;
+    Serial.print("Writing template against ID #"); Serial.println(id);
 
-  if (finger.write_template_to_sensor(template_buf_size,f_buf)) { //telling the sensor to download the template data to it's char buffer from upper computer (this microcontroller's "fingerTemplate" buffer)
-    Serial.println("now writing to sensor...");
-  } else {
-    Serial.println("writing to sensor failed");
-    return;
-  }
+    if (finger.write_template_to_sensor(template_buf_size, fingerTemplate3)) {
+        Serial.println("now writing to sensor...");
+    } else {
+        Serial.println("writing to sensor failed");
+        return;
+    }
 
-  Serial.print("ID "); Serial.println(id);
-  if (finger.storeModel(id) == FINGERPRINT_OK) { //saving the template against the ID you entered or manually set
-    Serial.print("Successfully stored against ID#");Serial.println(id);
-  } else {
-    Serial.println("Storing error");
-    return ;
-  }
+    Serial.print("ID "); Serial.println(id);
+    if (finger.storeModel(id) == FINGERPRINT_OK) {
+        Serial.print("Successfully stored against ID#");Serial.println(id);
+    } else {
+        Serial.println("Storing error");
+        return;
+    }
 }
+
+
+
 
 void enrollAPI() {
     int counter = 0;
     
     webSocket.broadcastTXT("Starting");
+    bufferString = "";
     
-    // Loop as long as bufferString is empty and counter is 3 or less.
+    uint8_t fingerTemplate[512];
+
     while (bufferString == "" && counter <= 3) {
         Serial.println("enrollAPI");
         store_template_to_buf();
@@ -703,10 +702,40 @@ void enrollAPI() {
     }
 }
 
-void verifyAPI(){
+void verifyAPI() {
   Serial.println("verifyAPI");
-  webServer.send(200, "text/plain", "This is verifyAPI endpoint");
+
+  // Assuming you are using some library that allows POST data retrieval. 
+  // Modify according to the actual library you are using.
+  if (webServer.hasArg("plain")) {
+    String bufferValue = webServer.arg("plain");
+    Serial.println(bufferValue);  
+
+    char bufferCopy[3*512+1];
+    strcpy(bufferCopy, bufferString.c_str());
+    char* token = strtok(bufferCopy, ",");
+    int index = 0;
+
+    while (token != nullptr && index < 512) {
+      fingerTemplate3[index] = strtol(token, nullptr, 16); // Convert the hex string to an integer
+      token = strtok(nullptr, ",");
+      index++;
+    }
+
+    // Print the copied data to verify
+    Serial.println("fingerTemplate3:");
+    for (int i = 0; i < 512; i++) {
+      Serial.print("0x");
+      Serial.print(fingerTemplate3[i], HEX);
+      Serial.print(",");
+    }
+    write_template_data_to_sensor();
+    webServer.send(200, "text/plain", "Buffer received and processed");
+  } else {
+    webServer.send(400, "text/plain", "No buffer parameter provided");
+  }
 }
+
 void deleteAPI(){
   Serial.println("deleteAPI");
   webServer.send(200, "text/plain", "This is deleteAPI endpoint");
