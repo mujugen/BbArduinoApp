@@ -393,7 +393,7 @@ void enrollAPI() {
     
     // If the loop exited due to bufferString being non-empty, send a success message.
     if (bufferString != "") {
-        webSocket.broadcastTXT("Waiting");
+        webSocket.broadcastTXT("Successfully enrolled");
         webServer.send(200, "text/plain", bufferString);
     }
 }
